@@ -5,7 +5,7 @@
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD.h>
-
+//Prova di commit
 JsonDocument settings;
 File flightSettingsF;
 String flightSettings;
