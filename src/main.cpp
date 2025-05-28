@@ -5,7 +5,6 @@
 #include <ArduinoJson.h>
 #include <SPI.h>
 #include <SD.h>
-#include "pico/multicore.h"
 
 JsonDocument settings;
 File flightSettingsF;
