@@ -5,6 +5,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <ArduinoJson.h>
 #include <SPI.h>
+#include <cmath>
 #include <SD.h>
 
 JsonDocument settings;
@@ -31,7 +32,7 @@ bool pyro = false;
 float accel[3], accelTOT;
 float gyro[3];
 float gyro_offset[3] = {0, 0, 0};
-float rot[3];
+float rot[3] = {0, 0, 0};
 float temp, pressure, altitude;
 float measurements, timeD;
 unsigned long last;
@@ -47,7 +48,10 @@ void setup()
   Serial.begin(115200);
   pixels.begin();
   softI2C.begin();
-  delay(2000);
+  delay(200);
+  pixels.setPixelColor(0, pixels.Color(0, 70, 70));
+  pixels.show();
+  delay(1800);
 
   SPI1.setRX(8);
   SPI1.setTX(11);
@@ -241,7 +245,9 @@ void loop1()
   {
     int16_t raw = (Wire.read() << 8) | Wire.read();
     gyro[i] = (raw / GYRO_SCALE) - gyro_offset[i];
-    rot[i] += gyro[i] * dt;
+    rot[i] = fmod(rot[i] + gyro[i] * dt, 360.0f);
+    if (rot[i] < 0)
+      rot[i] += 360.0f; // per evitare valori negativi
   }
 
   timeD = (micros() - last);
