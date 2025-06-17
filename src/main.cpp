@@ -63,6 +63,8 @@ void parachute()
 
 void cgyro(int samples = 2000)
 {
+  pixels.setPixelColor(0, pixels.Color(0, 70, 70));
+  pixels.show();
   long sum[3] = {0, 0, 0};
 
   for (int i = 0; i < samples; i++)
