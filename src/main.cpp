@@ -38,9 +38,84 @@ float measurements, timeD;
 unsigned long last;
 volatile bool ready = false;
 
+bool allow = true;
+
 float seaLevelPressure(float altitude, float pressure)
 {
   return pressure / pow(1.0 - (altitude / 44330.0), 5.255);
+}
+
+void parachute()
+{
+  if (flightSettings.length() > 0)
+  {
+    if ((String)settings["parachute"] == "pyro")
+    {
+      if (analogRead(29) > 100)
+      {
+        digitalWrite(28, HIGH);
+        delay(2000);
+        digitalWrite(28, LOW);
+      }
+    }
+  }
+}
+
+void cgyro(int samples = 2000)
+{
+  long sum[3] = {0, 0, 0};
+
+  for (int i = 0; i < samples; i++)
+  {
+    Wire.beginTransmission(MPU6050_ADDR);
+    Wire.write(REG_DATA_START);
+    Wire.endTransmission(false);
+    Wire.requestFrom(MPU6050_ADDR, 14);
+
+    Wire.read();
+    Wire.read(); // accelX
+    Wire.read();
+    Wire.read(); // accelY
+    Wire.read();
+    Wire.read(); // accelZ
+    Wire.read();
+    Wire.read(); // skip temp
+
+    for (int j = 0; j < 3; j++)
+    {
+      int16_t raw = (Wire.read() << 8) | Wire.read();
+      sum[j] += raw;
+    }
+    delay(2);
+  }
+
+  for (int i = 0; i < 3; i++)
+    gyro_offset[i] = (sum[i] / (float)samples) / GYRO_SCALE;
+}
+
+void command(String cmd)
+{
+  if (cmd == "reset")
+  {
+    allow = false;
+    delay(3);
+    rot[0] = 0;
+    rot[1] = 0;
+    rot[2] = 0;
+    allow = true;
+  }
+  else if (cmd.startsWith("cpressure"))
+  {
+    seaLevelPressure(cmd.substring(9).toFloat(), bmp.readPressure());
+  }
+  else if (cmd == "cgyro")
+  {
+    cgyro();
+  }
+  else if (cmd == "settings")
+  {
+    Serial.println(flightSettings);
+  }
 }
 
 void setup()
@@ -115,42 +190,14 @@ void setup()
   Wire.endTransmission();
   delay(10);
 
-  const int samples = 500;
-  long sum[3] = {0, 0, 0};
+  cgyro();
 
-  for (int i = 0; i < samples; i++)
-  {
-    Wire.beginTransmission(MPU6050_ADDR);
-    Wire.write(REG_DATA_START);
-    Wire.endTransmission(false);
-    Wire.requestFrom(MPU6050_ADDR, 14);
-
-    Wire.read();
-    Wire.read(); // accelX
-    Wire.read();
-    Wire.read(); // accelY
-    Wire.read();
-    Wire.read(); // accelZ
-    Wire.read();
-    Wire.read(); // skip temp
-
-    for (int j = 0; j < 3; j++)
-    {
-      int16_t raw = (Wire.read() << 8) | Wire.read();
-      sum[j] += raw;
-    }
-    delay(2);
-  }
-
-  for (int i = 0; i < 3; i++)
-    gyro_offset[i] = (sum[i] / (float)samples) / GYRO_SCALE;
-
-  Serial.println("Giroscopio calibrato:");
-  Serial.print("Offset X: ");
+  Serial.println("Calibrated gyroscope:");
+  Serial.print("X offset: ");
   Serial.println(gyro_offset[0]);
-  Serial.print("Offset Y: ");
+  Serial.print("Y offset: ");
   Serial.println(gyro_offset[1]);
-  Serial.print("Offset Z: ");
+  Serial.print("Z offset: ");
   Serial.println(gyro_offset[2]);
 
   ready = true;
@@ -167,19 +214,9 @@ void loop()
   if (Serial.available())
   {
     String cmd = Serial.readStringUntil('\n');
-    if (cmd == "settings\r")
-    {
-      Serial.println(flightSettings);
-    }
-    else
-    {
-      seaPressure = seaLevelPressure(cmd.toFloat(), pressure);
-      Serial.print("Sea pressure updated to ");
-      Serial.print(seaPressure);
-      Serial.print(" hPa (Altitude received: ");
-      Serial.print(cmd);
-      Serial.println(")");
-    }
+    cmd.replace("\r", "");
+    cmd.toLowerCase();
+    command(cmd);
   }
   pixels.setPixelColor(0, pixels.Color(0, 70, 0));
   if (analogRead(29) > 60)
@@ -219,38 +256,46 @@ void loop()
 
 void loop1()
 {
+  while (!allow)
+    ;
+  // Richiedi i 14 byte in un colpo solo (più veloce e compatto)
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(REG_DATA_START);
   Wire.endTransmission(false); // no stop
-
   Wire.requestFrom(MPU6050_ADDR, 14);
 
+  // Accelerometro (6 byte)
   for (int i = 0; i < 3; i++)
   {
     int16_t raw = (Wire.read() << 8) | Wire.read();
     accel[i] = raw / ACCEL_SCALE;
   }
 
-  accelTOT = sqrt(accel[0] * accel[0] + accel[1] * accel[1] + accel[2] * accel[2]);
+  accelTOT = sqrtf(accel[0] * accel[0] + accel[1] * accel[1] + accel[2] * accel[2]);
 
   Wire.read();
-  Wire.read(); // Skips temperature
+  Wire.read(); // salta la temperatura (2 byte)
 
+  float dt = (micros() - last) / 1000000.0f; // secondi
+
+  // Altimetro (solo una lettura ogni 10-50ms sarebbe sufficiente in molti casi)
   temp = bmp.readTemperature();
   pressure = bmp.readPressure();
-  altitude = 44330.0 * (1.0 - pow(pressure / seaPressure, 0.1903));
+  altitude = 44330.0f * (1.0f - powf(pressure / seaPressure, 0.1903f));
 
-  float dt = (micros() - last) / 1000000.0; // secondi
+  // Giroscopio (6 byte)
   for (int i = 0; i < 3; i++)
   {
     int16_t raw = (Wire.read() << 8) | Wire.read();
     gyro[i] = (raw / GYRO_SCALE) - gyro_offset[i];
-    rot[i] = fmod(rot[i] + gyro[i] * dt, 360.0f);
-    if (rot[i] < 0)
-      rot[i] += 360.0f; // per evitare valori negativi
+    rot[i] += gyro[i] * dt;
+    if (rot[i] >= 360.0f)
+      rot[i] -= 360.0f;
+    else if (rot[i] < 0.0f)
+      rot[i] += 360.0f;
   }
 
-  timeD = (micros() - last);
-  measurements = 1000000 / (timeD);
+  timeD = micros() - last;
+  measurements = 1000000.0f / timeD;
   last = micros();
 }
