@@ -75,13 +75,6 @@ Distributed under the MIT License. See the `LICENSE` file.
 
 ---
 
-## 📬 Contact
-
-For questions, feedback, or bug reports:  
-**nicrom098195 [at] example.com**
-
----
-
 ## ⚠️ Disclaimer
 
 This project is provided **solely for educational and experimental purposes**. The use of this code or hardware in real-world applications involves significant risk. The author **assumes no liability** for any damage to persons or property resulting from the use—whether proper or improper—of this software or hardware.  
