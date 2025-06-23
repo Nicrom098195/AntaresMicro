@@ -1,0 +1,27 @@
+{
+    "profile": "AntaresTest",
+    "events": [
+        {
+            "cause":"start",
+            "color":[0,70,0],
+            "effects":[]
+        },
+        {
+            "cause":"apogee",
+            "color":[35,70,0],
+            "effects":[]
+        },
+        {
+            "cause":"altitude",
+            "value":15,
+            "color":[0,0,70],
+            "effects":["parachute"]
+        },
+        {
+            "cause":"landing",
+            "color":[70,70,70],
+            "effects":[]
+        }
+    ],
+    "parachute":"pyro"
+}
