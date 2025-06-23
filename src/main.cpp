@@ -12,39 +12,47 @@ JsonDocument settings;
 File flightSettingsF;
 String flightSettings;
 
+// BMP280
 SoftI2C softI2C(15, 14);
 BMP280 bmp(softI2C, 0x76);
-Adafruit_NeoPixel pixels(1, 16, NEO_GRB + NEO_KHZ800);
+float seaPressure = 1014.11;
+float temp, pressure, altitude;
 
-// MPU6050 I2C
+
+// NeoPixel
+Adafruit_NeoPixel pixels(1, 16, NEO_GRB + NEO_KHZ800);
+int color[3] = {0,70,0};
+
+// MPU6050
 const uint8_t MPU6050_ADDR = 0x68;
 const uint8_t REG_PWR_MGMT_1 = 0x6B;
 const uint8_t REG_ACCEL_CONFIG = 0x1C;
 const uint8_t REG_GYRO_CONFIG = 0x1B;
 const uint8_t REG_DATA_START = 0x3B; // ACCEL_XOUT_H
 
-// Scale factors
 const float ACCEL_SCALE = 2048.0; // ±16g
 const float GYRO_SCALE = 16.4;    // ±2000°/s
 
-float seaPressure = 1014.11;
-bool pyro = false;
 float accel[3], accelTOT;
 float gyro[3];
 float gyro_offset[3] = {0, 0, 0};
 float rot[3] = {0, 0, 0};
-float temp, pressure, altitude;
+
+
+// Loop variables
 float measurements, timeD;
 unsigned long last;
 volatile bool ready = false;
-
 bool allow = true;
 
+
+// Calculates sea pressure based on known altitude and pressure at that same altitude
 float seaLevelPressure(float altitude, float pressure)
 {
   return pressure / pow(1.0 - (altitude / 44330.0), 5.255);
 }
 
+// Deploys parachute
 void parachute()
 {
   if (flightSettings.length() > 0)
@@ -61,6 +69,7 @@ void parachute()
   }
 }
 
+// Calibrates the gyroscope. Keep the computer still while running this function, it may take a couple of seconds
 void cgyro(int samples = 2000)
 {
   pixels.setPixelColor(0, pixels.Color(0, 70, 70));
@@ -95,6 +104,7 @@ void cgyro(int samples = 2000)
     gyro_offset[i] = (sum[i] / (float)samples) / GYRO_SCALE;
 }
 
+// Parses the commands that can be received by UART, Serial monitor or SPI LoRa
 void command(String cmd)
 {
   if (cmd == "reset")
@@ -108,7 +118,7 @@ void command(String cmd)
   }
   else if (cmd.startsWith("cpressure"))
   {
-    seaLevelPressure(cmd.substring(9).toFloat(), bmp.readPressure());
+    seaPressure = seaLevelPressure(cmd.substring(9).toFloat(), bmp.readPressure());
   }
   else if (cmd == "cgyro")
   {
@@ -120,8 +130,10 @@ void command(String cmd)
   }
 }
 
+// Computer setup
 void setup()
 {
+  // Initializes Serial, NeoPixel and BMP280's I2C
   Serial.begin(115200);
   pixels.begin();
   softI2C.begin();
@@ -130,6 +142,7 @@ void setup()
   pixels.show();
   delay(1800);
 
+  // Initializes the microSD
   SPI1.setRX(8);
   SPI1.setTX(11);
   SPI1.setSCK(10);
@@ -142,6 +155,7 @@ void setup()
       delay(10);
   }
 
+  // Reads the flight's settings
   flightSettingsF = SD.open("flight.json");
   while (flightSettingsF.available())
   {
@@ -152,6 +166,8 @@ void setup()
   Serial.println(flightSettings);
   Serial.println("\n\n\n");
   deserializeJson(settings, flightSettings);
+
+  // Initializes BMP280
   if (!bmp.begin())
   {
     Serial.println("BMP280 non trovato!");
@@ -161,39 +177,37 @@ void setup()
       delay(10);
   }
   Serial.println("BMP280 inizializzato!");
-  pixels.setPixelColor(0, pixels.Color(0, 70, 0));
-  pixels.show();
+
+  // Initializes the pyro channel
   pinMode(28, OUTPUT);
   digitalWrite(28, LOW);
 
+  // Initializes MPU6050
   Wire.setSDA(12);
   Wire.setSCL(13);
   Wire.begin();
-  Wire.setClock(400000); // I2C veloce
+  Wire.setClock(400000);
 
-  // Disattiva sleep mode
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(REG_PWR_MGMT_1);
   Wire.write(0x00);
   Wire.endTransmission();
   delay(10);
 
-  // Imposta accelerometro a ±16g
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(REG_ACCEL_CONFIG);
   Wire.write(0x18); // AFS_SEL = 3
   Wire.endTransmission();
   delay(10);
 
-  // Imposta giroscopio a ±2000°/s
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(REG_GYRO_CONFIG);
   Wire.write(0x18); // FS_SEL = 3
   Wire.endTransmission();
   delay(10);
 
+  // Calibrates gyroscope
   cgyro();
-
   Serial.println("Calibrated gyroscope:");
   Serial.print("X offset: ");
   Serial.println(gyro_offset[0]);
@@ -202,17 +216,20 @@ void setup()
   Serial.print("Z offset: ");
   Serial.println(gyro_offset[2]);
 
+  // Starts the second core
   ready = true;
 }
 
 void setup1()
 {
+  // Waits for the first core to be ready
   while (!ready)
     ;
 }
 
 void loop()
 {
+  // Linstens on serial monitor for commands to run
   if (Serial.available())
   {
     String cmd = Serial.readStringUntil('\n');
@@ -220,10 +237,12 @@ void loop()
     cmd.toLowerCase();
     command(cmd);
   }
-  pixels.setPixelColor(0, pixels.Color(0, 70, 0));
-  if (analogRead(29) > 60)
-    pixels.setPixelColor(0, pixels.Color(0, 0, 70));
+
+  // Updates NeoPixel
+  pixels.setPixelColor(0, pixels.Color(color[0], color[1], color[2]));
   pixels.show();
+
+  // Sends data to the serial monitor
   Serial.print("Temperatura: ");
   Serial.print(temp);
   Serial.print(" °C, Pressione: ");
@@ -253,39 +272,44 @@ void loop()
   Serial.print(",");
   Serial.print(rot[2]);
   Serial.println(")");
+
+  // Waits a bit
   delay(400);
 }
 
 void loop1()
 {
+  // Waits for permission to write variables
   while (!allow)
     ;
-  // Richiedi i 14 byte in un colpo solo (più veloce e compatto)
+  
+  // Gets raw MPU6050's data
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(REG_DATA_START);
   Wire.endTransmission(false); // no stop
   Wire.requestFrom(MPU6050_ADDR, 14);
 
-  // Accelerometro (6 byte)
+  // Reads the accelerometer
   for (int i = 0; i < 3; i++)
   {
     int16_t raw = (Wire.read() << 8) | Wire.read();
     accel[i] = raw / ACCEL_SCALE;
   }
 
+  // Gets total acceleration
   accelTOT = sqrtf(accel[0] * accel[0] + accel[1] * accel[1] + accel[2] * accel[2]);
 
+  // Skips temperature reading (We have the BMP280 for that)
   Wire.read();
-  Wire.read(); // salta la temperatura (2 byte)
+  Wire.read();
 
-  float dt = (micros() - last) / 1000000.0f; // secondi
-
-  // Altimetro (solo una lettura ogni 10-50ms sarebbe sufficiente in molti casi)
+  // Gets BMP280's data and calculates altitude
   temp = bmp.readTemperature();
   pressure = bmp.readPressure();
   altitude = 44330.0f * (1.0f - powf(pressure / seaPressure, 0.1903f));
 
-  // Giroscopio (6 byte)
+  // Reads the gyroscope
+  float dt = (micros() - last) / 1000000.0f; // secondi
   for (int i = 0; i < 3; i++)
   {
     int16_t raw = (Wire.read() << 8) | Wire.read();
@@ -297,6 +321,7 @@ void loop1()
       rot[i] += 360.0f;
   }
 
+  // Calculates delay
   timeD = micros() - last;
   measurements = 1000000.0f / timeD;
   last = micros();
