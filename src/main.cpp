@@ -9,6 +9,7 @@
 #include <SD.h>
 
 JsonDocument settings;
+JsonArray events;
 File flightSettingsF;
 String flightSettings;
 
@@ -16,12 +17,11 @@ String flightSettings;
 SoftI2C softI2C(15, 14);
 BMP280 bmp(softI2C, 0x76);
 float seaPressure = 1014.11;
-float temp, pressure, altitude;
-
+float temp, pressure, basealt = -1, altitude;
 
 // NeoPixel
 Adafruit_NeoPixel pixels(1, 16, NEO_GRB + NEO_KHZ800);
-int color[3] = {0,70,0};
+int color[3] = {0, 70, 0};
 
 // MPU6050
 const uint8_t MPU6050_ADDR = 0x68;
@@ -38,35 +38,20 @@ float gyro[3];
 float gyro_offset[3] = {0, 0, 0};
 float rot[3] = {0, 0, 0};
 
-
 // Loop variables
 float measurements, timeD;
 unsigned long last;
 volatile bool ready = false;
 bool allow = true;
-
+unsigned long int event = 0;
+String logfile;
+float begin = 0;
 
 // Calculates sea pressure based on known altitude and pressure at that same altitude
 float seaLevelPressure(float altitude, float pressure)
 {
   return pressure / pow(1.0 - (altitude / 44330.0), 5.255);
-}
-
-// Deploys parachute
-void parachute()
-{
-  if (flightSettings.length() > 0)
-  {
-    if ((String)settings["parachute"] == "pyro")
-    {
-      if (analogRead(29) > 100)
-      {
-        digitalWrite(28, HIGH);
-        delay(2000);
-        digitalWrite(28, LOW);
-      }
-    }
-  }
+  basealt = -1;
 }
 
 // Calibrates the gyroscope. Keep the computer still while running this function, it may take a couple of seconds
@@ -166,6 +151,46 @@ void setup()
   Serial.println(flightSettings);
   Serial.println("\n\n\n");
   deserializeJson(settings, flightSettings);
+  events = settings["events"];
+
+  if (!SD.exists("Logs"))
+  {
+    SD.mkdir("Logs");
+    Serial.println("Cartella Logs creata");
+  }
+
+  int fileIndex = 0;
+  do
+  {
+    logfile = "Logs/log" + String(fileIndex) + ".csv";
+    fileIndex++;
+  } while (SD.exists(logfile));
+
+  File logFile = SD.open(logfile, FILE_WRITE);
+  if (logFile)
+  {
+    logFile.println("#Timestamp,Event,AccelX,AccelY,AccelZ,AccelTOT,GyroX,GyroY,GyroZ,RotX,RotY,RotZ,Pressure,Altitude,Relative Altitude"); // intestazione CSV
+    logFile.close();
+    Serial.println("File creato correttamente");
+  }
+  else
+  {
+    Serial.println("Errore creazione file");
+  }
+
+  /*
+  for (int i = 0; i < events.size(); i++)
+  {
+    if ((strcmp(events[i]["sensor"].as<const char *>(), "accel") + strcmp(events[i]["sensor"].as<const char *>(), "press") + strcmp(events[i]["sensor"].as<const char *>(), "alt")) != 0)
+    {
+
+      Serial.println("Flight events not readable");
+      pixels.setPixelColor(0, pixels.Color(70, 0, 70));
+      pixels.show();
+      while (1)
+        delay(10);
+    }
+  }*/
 
   // Initializes BMP280
   if (!bmp.begin())
@@ -217,6 +242,7 @@ void setup()
   Serial.println(gyro_offset[2]);
 
   // Starts the second core
+  begin = micros() / 1000000;
   ready = true;
 }
 
@@ -241,7 +267,7 @@ void loop()
   // Updates NeoPixel
   pixels.setPixelColor(0, pixels.Color(color[0], color[1], color[2]));
   pixels.show();
-
+  /*
   // Sends data to the serial monitor
   Serial.print("Temperatura: ");
   Serial.print(temp);
@@ -272,9 +298,148 @@ void loop()
   Serial.print(",");
   Serial.print(rot[2]);
   Serial.println(")");
+  */
 
-  // Waits a bit
-  delay(400);
+  File logFile = SD.open(logfile, FILE_WRITE);
+  if (logFile)
+  {
+    float t = (micros() / 1000000.0) - begin;
+    logFile.print(t, 6);
+    logFile.print(",");
+    logFile.print(event);
+    logFile.print(",");
+    logFile.print(accel[0]);
+    logFile.print(",");
+    logFile.print(accel[1]);
+    logFile.print(",");
+    logFile.print(accel[2]);
+    logFile.print(",");
+    logFile.print(accelTOT);
+    logFile.print(",");
+    logFile.print(gyro[0]);
+    logFile.print(",");
+    logFile.print(gyro[1]);
+    logFile.print(",");
+    logFile.print(gyro[2]);
+    logFile.print(",");
+    logFile.print(rot[0]);
+    logFile.print(",");
+    logFile.print(rot[1]);
+    logFile.print(",");
+    logFile.print(rot[2]);
+    logFile.print(",");
+    logFile.print(pressure);
+    logFile.print(",");
+    logFile.print(altitude);
+    logFile.print(",");
+    logFile.println(altitude - basealt);
+
+    logFile.close();
+  }
+
+  // Event management
+  bool run = false;
+  if (strcmp(events[event]["sensor"].as<const char *>(), "accel") == 0)
+  {
+    if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
+    {
+      if (accelTOT < events[event]["value"].as<float>())
+      {
+        run = true;
+      }
+    }
+    else
+    {
+      if (accelTOT > events[event]["value"].as<float>())
+      {
+        run = true;
+      }
+    }
+  }
+  else if (strcmp(events[event]["sensor"].as<const char *>(), "press") == 0)
+  {
+    if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
+    {
+      if (pressure < events[event]["value"].as<float>())
+      {
+        run = true;
+      }
+    }
+    else
+    {
+      if (pressure > events[event]["value"].as<float>())
+      {
+        run = true;
+      }
+    }
+  }
+  else if (strcmp(events[event]["sensor"].as<const char *>(), "alt") == 0)
+  {
+    if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
+    {
+      if ((altitude - basealt) < events[event]["value"].as<float>())
+      {
+        run = true;
+      }
+    }
+    else
+    {
+      if ((altitude - basealt) > events[event]["value"].as<float>())
+      {
+        run = true;
+      }
+    }
+  }
+
+  if (run)
+  {
+    for (size_t i = 0; i < 3; i++)
+    {
+      color[i] = events[event]["color"][i].as<int>();
+    }
+    for (int i = 0; i < events[event]["effects"].size(); i++)
+    {
+      if (strcmp(events[event]["effects"][i].as<const char *>(), "pyro") == 0)
+      {
+        digitalWrite(28, (digitalRead(28) + 1) % 2);
+        Serial.println("Pyro triggered");
+      }
+      else if (strncmp(events[event]["effects"][i].as<const char *>(), "servo", 5) == 0)
+      {
+        Serial.print("Moving servo to position ");
+        Serial.println(atof((events[event]["effects"][i].as<const char *>()) + 5));
+      }
+    }
+
+    File logFile = SD.open(logfile, FILE_WRITE);
+    if (logFile)
+    {
+      logFile.print("# Event ");
+      logFile.println(event++);
+
+      logFile.close();
+    }
+  }
+  else
+  {
+    Serial.print("Waiting for event ");
+    Serial.println(event);
+  }
+
+  if (event == events.size())
+  {
+    while (true)
+    {
+      Serial.println("Landed");
+      pixels.setPixelColor(0, pixels.Color(0, 70, 70));
+      pixels.show();
+      delay(500);
+      Serial.println("Landed");
+      pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+      pixels.show();
+      delay(500);
+    }
+  }
 }
 
 void loop1()
@@ -282,7 +447,7 @@ void loop1()
   // Waits for permission to write variables
   while (!allow)
     ;
-  
+
   // Gets raw MPU6050's data
   Wire.beginTransmission(MPU6050_ADDR);
   Wire.write(REG_DATA_START);
@@ -307,6 +472,8 @@ void loop1()
   temp = bmp.readTemperature();
   pressure = bmp.readPressure();
   altitude = 44330.0f * (1.0f - powf(pressure / seaPressure, 0.1903f));
+  if (basealt == -1)
+    basealt = altitude;
 
   // Reads the gyroscope
   float dt = (micros() - last) / 1000000.0f; // secondi

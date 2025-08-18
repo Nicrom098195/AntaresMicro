@@ -2,26 +2,32 @@
     "profile": "AntaresTest",
     "events": [
         {
-            "cause":"start",
+            "sensor":"accel",
+            "type":"min",
+            "value":2,
             "color":[0,70,0],
-            "effects":[]
+            "effects":["servo12"]
         },
         {
-            "cause":"apogee",
+            "sensor":"accel",
+            "type":"max",
+            "value":0.2,
             "color":[35,70,0],
-            "effects":[]
+            "effects":["servo50"]
         },
         {
-            "cause":"altitude",
+            "sensor":"alt",
+            "type":"max",
             "value":15,
             "color":[0,0,70],
-            "effects":["parachute"]
+            "effects":["pyro"]
         },
         {
-            "cause":"landing",
+            "sensor":"alt",
+            "type":"max",
+            "value":2,
             "color":[70,70,70],
-            "effects":[]
+            "effects":["pyro"]
         }
-    ],
-    "parachute":"pyro"
+    ]
 }
