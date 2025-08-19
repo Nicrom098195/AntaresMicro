@@ -43,7 +43,7 @@ float measurements, timeD;
 unsigned long last;
 volatile bool ready = false;
 bool allow = true;
-unsigned long int event = 0;
+unsigned long int event = 0, lastevent = 0;
 String logfile;
 float begin = 0;
 
@@ -348,57 +348,84 @@ void loop()
 
   // Event management
   bool run = false;
-  if (strcmp(events[event]["sensor"].as<const char *>(), "accel") == 0)
+  String data = events[event]["sensor"].as<const char *>();
+  data += '|';
+  int idx = data.indexOf('|');
+  int start = 0;
+
+  Serial.print("Waiting for event ");
+  Serial.print(event);
+  Serial.print(" - ");
+
+  while (idx >= 0)
   {
-    if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
+    String token = data.substring(start, idx);
+    Serial.print(token);
+    Serial.print("    ");
+
+    if (token == "accel")
     {
-      if (accelTOT < events[event]["value"].as<float>())
+      if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
+      {
+        if (accelTOT < events[event]["value"].as<float>())
+        {
+          run = true;
+        }
+      }
+      else
+      {
+        if (accelTOT > events[event]["value"].as<float>())
+        {
+          run = true;
+        }
+      }
+    }
+    else if (token == "press")
+    {
+      if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
+      {
+        if (pressure < events[event]["value"].as<float>())
+        {
+          run = true;
+        }
+      }
+      else
+      {
+        if (pressure > events[event]["value"].as<float>())
+        {
+          run = true;
+        }
+      }
+    }
+    else if (token == "alt")
+    {
+      if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
+      {
+        if ((altitude - basealt) < events[event]["value"].as<float>())
+        {
+          run = true;
+        }
+      }
+      else
+      {
+        if ((altitude - basealt) > events[event]["value"].as<float>())
+        {
+          run = true;
+        }
+      }
+    }
+    else if (token.startsWith("time"))
+    {
+      if ((micros() - lastevent) / 1000000 >= token.substring(4).toFloat())
       {
         run = true;
       }
     }
-    else
-    {
-      if (accelTOT > events[event]["value"].as<float>())
-      {
-        run = true;
-      }
-    }
+
+    start = idx + 1;
+    idx = data.indexOf('|', start);
   }
-  else if (strcmp(events[event]["sensor"].as<const char *>(), "press") == 0)
-  {
-    if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
-    {
-      if (pressure < events[event]["value"].as<float>())
-      {
-        run = true;
-      }
-    }
-    else
-    {
-      if (pressure > events[event]["value"].as<float>())
-      {
-        run = true;
-      }
-    }
-  }
-  else if (strcmp(events[event]["sensor"].as<const char *>(), "alt") == 0)
-  {
-    if (strcmp(events[event]["type"].as<const char *>(), "max") == 0)
-    {
-      if ((altitude - basealt) < events[event]["value"].as<float>())
-      {
-        run = true;
-      }
-    }
-    else
-    {
-      if ((altitude - basealt) > events[event]["value"].as<float>())
-      {
-        run = true;
-      }
-    }
-  }
+  Serial.println();
 
   if (run)
   {
@@ -424,15 +451,12 @@ void loop()
     if (logFile)
     {
       logFile.print("# Event ");
-      logFile.println(event++);
+      logFile.println(event);
 
       logFile.close();
     }
-  }
-  else
-  {
-    Serial.print("Waiting for event ");
-    Serial.println(event);
+    event++;
+    lastevent = micros();
   }
 
   if (event == events.size())

@@ -9,7 +9,7 @@
             "effects":["servo12"]
         },
         {
-            "sensor":"accel",
+            "sensor":"accel|time2",
             "type":"max",
             "value":0.2,
             "color":[35,70,0],
