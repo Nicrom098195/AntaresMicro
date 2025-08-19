@@ -118,7 +118,8 @@ void command(String cmd)
 // Computer setup
 void setup()
 {
-  // Initializes Serial, NeoPixel and BMP280's I2C
+  // Initializes Serial
+  , NeoPixel and BMP280's I2C
   Serial.begin(115200);
   pixels.begin();
   softI2C.begin();
@@ -257,6 +258,15 @@ void loop()
 {
   // Linstens on serial monitor for commands to run
   if (Serial.available())
+  {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.replace("\r", "");
+    cmd.toLowerCase();
+    command(cmd);
+  }
+
+  // Linstens on UART serial for commands to run
+  if (Serial1.available())
   {
     String cmd = Serial.readStringUntil('\n');
     cmd.replace("\r", "");
