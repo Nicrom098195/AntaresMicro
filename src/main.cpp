@@ -118,8 +118,7 @@ void command(String cmd)
 // Computer setup
 void setup()
 {
-  // Initializes Serial
-  , NeoPixel and BMP280's I2C
+  // Initializes Serial, NeoPixel and BMP280's I2C
   Serial.begin(115200);
   pixels.begin();
   softI2C.begin();
