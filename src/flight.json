@@ -5,7 +5,7 @@
             "sensor":"accel",
             "type":"min",
             "value":2,
-            "color":[0,70,0],
+            "color":[0,70,35],
             "effects":["1servo12"]
         },
         {
