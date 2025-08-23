@@ -440,10 +440,15 @@ void loop()
         digitalWrite(28, (digitalRead(28) + 1) % 2);
         Serial.println("Pyro triggered");
       }
-      else if (strncmp(events[event]["effects"][i].as<const char *>(), "servo", 5) == 0)
+      else if (strncmp(events[event]["effects"][i].as<const char *>(), "1servo", 6) == 0)
       {
-        Serial.print("Moving servo to position ");
-        Serial.println(atof((events[event]["effects"][i].as<const char *>()) + 5));
+        Serial.print("Moving servo 1 to position ");
+        Serial.println(atof((events[event]["effects"][i].as<const char *>()) + 6));
+      }
+      else if (strncmp(events[event]["effects"][i].as<const char *>(), "2servo", 6) == 0)
+      {
+        Serial.print("Moving servo 2 to position ");
+        Serial.println(atof((events[event]["effects"][i].as<const char *>()) + 6));
       }
     }
 

@@ -6,14 +6,14 @@
             "type":"min",
             "value":2,
             "color":[0,70,0],
-            "effects":["servo12"]
+            "effects":["1servo12"]
         },
         {
             "sensor":"accel|time2",
             "type":"max",
             "value":0.2,
             "color":[35,70,0],
-            "effects":["servo50"]
+            "effects":["2servo50"]
         },
         {
             "sensor":"alt",
@@ -23,11 +23,16 @@
             "effects":["pyro"]
         },
         {
+            "sensor":"time3",
+            "color":[70,70,70],
+            "effects":["pyro"]
+        }
+        {
             "sensor":"alt",
             "type":"max",
             "value":2,
             "color":[70,70,70],
-            "effects":["pyro"]
+            "effects":["1servo11"]
         }
     ]
 }
