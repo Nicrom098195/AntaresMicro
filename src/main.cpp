@@ -173,7 +173,7 @@ void setup()
   File logFile = SD.open(logfile, FILE_WRITE);
   if (logFile)
   {
-    logFile.println("#Timestamp,Event,AccelX,AccelY,AccelZ,AccelTOT,GyroX,GyroY,GyroZ,RotX,RotY,RotZ,Pressure,Altitude,Relative Altitude, Continuity"); // intestazione CSV
+    logFile.println("#Timestamp,Event,AccelX,AccelY,AccelZ,AccelTOT,GyroX,GyroY,GyroZ,RotX,RotY,RotZ,Pressure,Altitude,Relative Altitude,Continuity,Pyro"); // intestazione CSV
     logFile.close();
     Serial.println("File creato correttamente");
   }
@@ -347,7 +347,9 @@ void loop()
     logFile.print(",");
     logFile.print(altitude - basealt);
     logFile.print(",");
-    logFile.println(continuity());
+    logFile.print(continuity());
+    logFile.print(",");
+    logFile.println(digitalRead(28));
 
     logFile.close();
   }
