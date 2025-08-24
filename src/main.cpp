@@ -89,6 +89,10 @@ void cgyro(int samples = 2000)
     gyro_offset[i] = (sum[i] / (float)samples) / GYRO_SCALE;
 }
 
+bool continuity(){
+  return (analogRead(29)>100);
+}
+
 // Parses the commands that can be received by UART, Serial monitor or SPI LoRa
 void command(String cmd)
 {
@@ -169,7 +173,7 @@ void setup()
   File logFile = SD.open(logfile, FILE_WRITE);
   if (logFile)
   {
-    logFile.println("#Timestamp,Event,AccelX,AccelY,AccelZ,AccelTOT,GyroX,GyroY,GyroZ,RotX,RotY,RotZ,Pressure,Altitude,Relative Altitude"); // intestazione CSV
+    logFile.println("#Timestamp,Event,AccelX,AccelY,AccelZ,AccelTOT,GyroX,GyroY,GyroZ,RotX,RotY,RotZ,Pressure,Altitude,Relative Altitude, Continuity"); // intestazione CSV
     logFile.close();
     Serial.println("File creato correttamente");
   }
@@ -341,7 +345,9 @@ void loop()
     logFile.print(",");
     logFile.print(altitude);
     logFile.print(",");
-    logFile.println(altitude - basealt);
+    logFile.print(altitude - basealt);
+    logFile.print(",");
+    logFile.println(continuity());
 
     logFile.close();
   }
